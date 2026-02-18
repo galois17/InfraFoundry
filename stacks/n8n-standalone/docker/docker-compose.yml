@@ -1,3 +1,11 @@
+# @infra-stack
+# name: n8n Workflow Automation
+# description: Self-hosted workflow automation with Postgres/Redis.
+# tags: automation, low-code, postgres
+# capabilities: webhook, scheduling
+# health_check: /healthz
+# port: 5678
+
 version: '3.8'
 
 volumes:
