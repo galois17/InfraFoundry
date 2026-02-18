@@ -23,9 +23,9 @@ jobs:
       matrix:
         stack_path:
           # --- LIST YOUR STACKS HERE ---
-          - stacks/n8n-standalone
-          #- stacks/n8n-rabbitmq
-          # - stacks/future-stack-placeholder  <-- Add new ones here later
+          - stacks/n8n-standalone/docker
+          #- stacks/n8n-rabbitmq/docker
+          # - stacks/future-stack-placeholder/docker  <-- Add new ones here later
 
     steps:
       - name: Checkout Code
