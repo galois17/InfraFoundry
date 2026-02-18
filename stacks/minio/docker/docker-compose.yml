@@ -1,3 +1,11 @@
+# @infra-stack
+# name: MinIO Object Storage
+# description: High-performance, S3-compatible object storage server. Useful for local development mimicking AWS S3.
+# tags: storage, s3, blob, aws-compatible
+# capabilities: file-storage, s3-api, backup-target
+# health_check: /minio/health/live
+# port: 9000
+
 version: "3.9"
 
 services:
