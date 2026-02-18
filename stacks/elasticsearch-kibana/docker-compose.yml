@@ -1,0 +1,69 @@
+# @infra-stack
+# name: Elasticsearch & Kibana (Secured)
+# description: ELK stack with automated security configuration. Uses 'kibana_system' service account to prevent 8.0+ startup errors.
+# tags: search, elk, analytics, testing
+# capabilities: full-text-search, log-analysis
+# health_check: /_cluster/health
+# port: 9200
+
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    container_name: es-node
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=${XPACK_SECURITY_ENABLED}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - "ES_JAVA_OPTS=${ES_JAVA_OPTS}"
+    ports:
+      - "${ES_PORT}:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -u elastic:${ELASTIC_PASSWORD} -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+    container_name: kibana
+    ports:
+      - "${KIBANA_PORT}:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # CONFIGURATOR & LOADER
+  setup:
+    image: curlimages/curl
+    container_name: es-setup
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./setup:/setup
+    environment:
+      - ELASTIC_URL=http://elasticsearch:9200
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - KIBANA_PASSWORD=${KIBANA_PASSWORD}
+      - SECURITY_ENABLED=${XPACK_SECURITY_ENABLED}
+    command: /bin/sh /setup/entrypoint.sh
+
+volumes:
+  es_data:

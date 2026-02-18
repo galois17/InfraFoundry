@@ -1,0 +1,4 @@
+{"index": {"_index": "logs-app-prod", "_id": "1"}}
+{"timestamp": "2024-02-18T10:00:00", "level": "INFO", "message": "User login successful", "user_id": 42}
+{"index": {"_index": "logs-app-prod", "_id": "2"}}
+{"timestamp": "2024-02-18T10:05:00", "level": "ERROR", "message": "Database connection timeout", "service": "payment-api"}
