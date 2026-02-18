@@ -1,0 +1,98 @@
+name: Verify Infrastructure Stacks
+
+on:
+  push:
+    paths:
+      - 'stacks/**'       # Run when any stack file changes
+      - '.github/workflows/verify-stacks.yml' # Run when you edit this workflow
+  pull_request:
+    paths:
+      - 'stacks/**'
+  schedule:
+    - cron: '0 8 * * 1'   # Weekly Health Check (Mondays at 8am UTC)
+  workflow_dispatch:      # Allows you to click "Run Now" manually in GitHub UI
+
+jobs:
+  test-stack:
+    name: Test ${{ matrix.stack_path }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10   # Safety: Kill job if it hangs >10 mins
+    
+    strategy:
+      fail-fast: false    # If n8n-standalone fails, STILL test n8n-rabbitmq
+      matrix:
+        stack_path:
+          # --- LIST YOUR STACKS HERE ---
+          - stacks/n8n-standalone
+          #- stacks/n8n-rabbitmq
+          # - stacks/future-stack-placeholder  <-- Add new ones here later
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 1. Setup Environment
+      - name: Configure Environment (.env)
+        working-directory: ${{ matrix.stack_path }}
+        run: |
+          if [ -f .env.example ]; then
+            echo "Creating .env from example..."
+            cp .env.example .env
+          else
+            echo "::warning::No .env.example found in ${{ matrix.stack_path }}"
+          fi
+
+      # 2. Start Services
+      - name: Start Stack
+        working-directory: ${{ matrix.stack_path }}
+        run: |
+          echo "Starting Docker Compose..."
+          docker compose up -d
+
+      # 3. The "Wait & Verify" Loop
+      # This is better than a simple 'sleep' because it checks actual container health
+      - name: Wait for Healthy Containers
+        working-directory: ${{ matrix.stack_path }}
+        run: |
+          echo "Waiting for services to stabilize (max 60s)..."
+          
+          # Retry loop: Check 12 times with 5s delay (60s total)
+          for i in {1..12}; do
+            # Count how many containers are NOT healthy (ignoring ones without healthchecks)
+            UNHEALTHY_COUNT=$(docker ps --format "{{.Status}}" | grep -i "unhealthy" | wc -l)
+            STARTING_COUNT=$(docker ps --format "{{.Status}}" | grep -i "starting" | wc -l)
+            
+            if [ "$UNHEALTHY_COUNT" -eq "0" ] && [ "$STARTING_COUNT" -eq "0" ]; then
+              echo "✅ All containers are running and healthy!"
+              docker ps
+              exit 0
+            fi
+            
+            echo "⏳ Waiting... ($STARTING_COUNT starting, $UNHEALTHY_COUNT unhealthy)"
+            sleep 5
+          done
+          
+          echo "❌ Timeout waiting for health checks."
+          exit 1
+
+      # 4. Application Level Check (The "User" Test)
+      # Checks if n8n is actually responding to HTTP requests
+      - name: Verify n8n HTTP Response
+        run: |
+          echo "Testing http://localhost:5678/healthz ..."
+          # Retry curl for 30 seconds to allow web server to boot
+          timeout 30s bash -c 'until curl --silent --fail http://localhost:5678/healthz; do sleep 2; done'
+          echo "✅ n8n web interface is reachable!"
+
+      # 5. Debugging (Only runs if previous steps failed)
+      - name: 🚨 Dump Logs on Failure
+        if: failure()
+        working-directory: ${{ matrix.stack_path }}
+        run: |
+          echo "::group::Docker Compose Logs"
+          docker compose logs
+          echo "::endgroup::"
+          echo "::group::Container Inspection"
+          docker ps -a
+          echo "::endgroup::"
+
